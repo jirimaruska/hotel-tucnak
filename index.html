@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Hotel Tučňák">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="description" content="Rezervační systém Hotel U Tučňáka - hra pro děti">
+  
+  <title>Hotel U Tučňáka 🐧</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- iOS ikony -->
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167.png">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <style>
+    /* Prevent pull-to-refresh on mobile */
+    body {
+      overscroll-behavior-y: contain;
+    }
+    /* iOS safe areas */
+    .safe-top {
+      padding-top: env(safe-area-inset-top);
+    }
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  </style>
+</head>
+<body class="safe-top safe-bottom">
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useCallback } = React;
+
+    const initialRooms = [
+      { id: 1, name: 'Ledový pokoj', icon: '❄️', price: 100, maxGuests: 2, guest: '', adults: 1, children: 0, checkedIn: false, paid: false, breakfast: false, nights: 1 },
+      { id: 2, name: 'Sněhový pokoj', icon: '⛄', price: 120, maxGuests: 3, guest: '', adults: 1, children: 0, checkedIn: false, paid: false, breakfast: false, nights: 1 },
+      { id: 3, name: 'Polární pokoj', icon: '🐧', price: 150, maxGuests: 4, guest: '', adults: 1, children: 0, checkedIn: false, paid: false, breakfast: false, nights: 1 },
+      { id: 4, name: 'Arktický pokoj', icon: '🧊', price: 130, maxGuests: 3, guest: '', adults: 1, children: 0, checkedIn: false, paid: false, breakfast: false, nights: 1 },
+      { id: 5, name: 'Iglú suite', icon: '🏔️', price: 200, maxGuests: 5, guest: '', adults: 1, children: 0, checkedIn: false, paid: false, breakfast: false, nights: 1 },
+      { id: 6, name: 'Severní záře', icon: '✨', price: 250, maxGuests: 6, guest: '', adults: 1, children: 0, checkedIn: false, paid: false, breakfast: false, nights: 1 },
+    ];
+
+    const BREAKFAST_PRICE_ADULT = 50;
+    const BREAKFAST_PRICE_CHILD = 30;
+
+    // Sound effects using Web Audio API
+    const useSound = () => {
+      const playSound = useCallback((type) => {
+        try {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          switch(type) {
+            case 'checkin':
+              oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime);
+              oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1);
+              oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2);
+              oscillator.type = 'sine';
+              gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.4);
+              break;
+            case 'checkout':
+              oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime);
+              oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.15);
+              oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime + 0.3);
+              oscillator.type = 'sine';
+              gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.5);
+              break;
+            case 'cash':
+              oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+              oscillator.frequency.setValueAtTime(1500, audioContext.currentTime + 0.05);
+              oscillator.frequency.setValueAtTime(2000, audioContext.currentTime + 0.1);
+              oscillator.type = 'square';
+              gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.2);
+              break;
+            case 'breakfast':
+              oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+              oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+              oscillator.type = 'sine';
+              gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.2);
+              break;
+            case 'click':
+              oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+              oscillator.type = 'sine';
+              gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.05);
+              break;
+            case 'error':
+              oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+              oscillator.frequency.setValueAtTime(120, audioContext.currentTime + 0.06);
+              oscillator.type = 'square';
+              gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.1);
+              break;
+            default:
+              break;
+          }
+        } catch (e) {
+          console.log('Sound not supported');
+        }
+      }, []);
+      
+      return playSound;
+    };
+
+    function HotelTucnak() {
+      const [rooms, setRooms] = useState(initialRooms);
+      const [selectedRoom, setSelectedRoom] = useState(null);
+      const [guestName, setGuestName] = useState('');
+      const [guestNights, setGuestNights] = useState(1);
+      const [guestAdults, setGuestAdults] = useState(1);
+      const [guestChildren, setGuestChildren] = useState(0);
+      const [guestBreakfast, setGuestBreakfast] = useState(false);
+      const [showCheckIn, setShowCheckIn] = useState(false);
+      const [soundEnabled, setSoundEnabled] = useState(true);
+      
+      const playSound = useSound();
+      
+      const sound = useCallback((type) => {
+        if (soundEnabled) playSound(type);
+      }, [soundEnabled, playSound]);
+
+      const occupiedCount = rooms.filter(r => r.checkedIn).length;
+      const freeCount = rooms.length - occupiedCount;
+      
+      const calculateBreakfast = (room) => {
+        return (room.adults * BREAKFAST_PRICE_ADULT + room.children * BREAKFAST_PRICE_CHILD) * room.nights;
+      };
+      
+      const calculateTotal = (room) => {
+        const roomCost = room.price * room.nights;
+        const breakfastCost = room.breakfast ? calculateBreakfast(room) : 0;
+        return roomCost + breakfastCost;
+      };
+
+      const totalRevenue = rooms.filter(r => r.paid).reduce((sum, r) => sum + calculateTotal(r), 0);
+      const totalGuests = rooms.filter(r => r.checkedIn).reduce((sum, r) => sum + r.adults + r.children, 0);
+
+      const handleCheckIn = (roomId) => {
+        if (!guestName.trim()) return;
+        sound('checkin');
+        setRooms(rooms.map(room => 
+          room.id === roomId 
+            ? { ...room, guest: guestName, checkedIn: true, nights: guestNights, adults: guestAdults, children: guestChildren, breakfast: guestBreakfast }
+            : room
+        ));
+        resetForm();
+      };
+
+      const resetForm = () => {
+        setGuestName('');
+        setGuestNights(1);
+        setGuestAdults(1);
+        setGuestChildren(0);
+        setGuestBreakfast(false);
+        setShowCheckIn(false);
+        setSelectedRoom(null);
+      };
+
+      const handleCheckOut = (roomId) => {
+        sound('checkout');
+        setRooms(rooms.map(room => 
+          room.id === roomId 
+            ? { ...room, guest: '', checkedIn: false, paid: false, breakfast: false, nights: 1, adults: 1, children: 0 }
+            : room
+        ));
+        setSelectedRoom(null);
+      };
+
+      const togglePaid = (roomId) => {
+        const room = rooms.find(r => r.id === roomId);
+        if (!room.paid) sound('cash');
+        else sound('click');
+        setRooms(rooms.map(room => 
+          room.id === roomId ? { ...room, paid: !room.paid } : room
+        ));
+      };
+
+      const toggleBreakfast = (roomId) => {
+        const room = rooms.find(r => r.id === roomId);
+        if (!room.breakfast) sound('breakfast');
+        else sound('click');
+        setRooms(rooms.map(room => 
+          room.id === roomId ? { ...room, breakfast: !room.breakfast } : room
+        ));
+      };
+
+      const updateNights = (roomId, delta) => {
+        const room = rooms.find(r => r.id === roomId);
+        const newNights = room.nights + delta;
+        if (newNights < 1 || newNights > 14) {
+          sound('error');
+          return;
+        }
+        sound('click');
+        setRooms(rooms.map(r => 
+          r.id === roomId ? { ...r, nights: newNights } : r
+        ));
+      };
+
+      const updateRoomGuests = (roomId, type, delta) => {
+        const room = rooms.find(r => r.id === roomId);
+        const newAdults = type === 'adults' ? room.adults + delta : room.adults;
+        const newChildren = type === 'children' ? room.children + delta : room.children;
+        
+        if (newAdults < 1 || newChildren < 0 || newAdults + newChildren > room.maxGuests) {
+          sound('error');
+          return;
+        }
+        
+        sound('click');
+        setRooms(rooms.map(r => 
+          r.id === roomId ? { ...r, adults: newAdults, children: newChildren } : r
+        ));
+      };
+
+      const openCheckIn = (room) => {
+        sound('click');
+        setSelectedRoom(room);
+        setShowCheckIn(true);
+      };
+
+      const canAddGuest = () => {
+        if (!selectedRoom) return false;
+        return guestAdults + guestChildren < selectedRoom.maxGuests;
+      };
+
+      const previewBreakfastCost = () => {
+        return (guestAdults * BREAKFAST_PRICE_ADULT + guestChildren * BREAKFAST_PRICE_CHILD) * guestNights;
+      };
+
+      const Counter = ({ value, onDecrease, onIncrease, min = 0, label, icon }) => (
+        <div className="flex items-center justify-between bg-white/50 rounded-xl p-2">
+          <span className="font-medium text-gray-700">{icon} {label}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onDecrease}
+              className="w-9 h-9 rounded-full bg-sky-500 text-white font-bold text-lg shadow active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+            >
+              -
+            </button>
+            <span className="text-xl font-bold text-sky-700 w-6 text-center">{value}</span>
+            <button
+              onClick={onIncrease}
+              className="w-9 h-9 rounded-full bg-sky-500 text-white font-bold text-lg shadow active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-sky-200 via-sky-100 to-white pb-8">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-sky-600 to-blue-700 text-white p-4 shadow-lg sticky top-0 z-10">
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-4xl">🐧</span>
+              <div className="text-center">
+                <h1 className="text-2xl font-bold">Hotel U Tučňáka</h1>
+                <p className="text-sky-200 text-sm">Rezervační systém</p>
+              </div>
+              <span className="text-4xl">🐧</span>
+            </div>
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="absolute right-3 top-3 text-2xl"
+            >
+              {soundEnabled ? '🔊' : '🔇'}
+            </button>
+          </div>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-4 gap-2 p-3 bg-white/80 backdrop-blur shadow-sm">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{freeCount}</div>
+              <div className="text-xs text-gray-600">Volné</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-500">{occupiedCount}</div>
+              <div className="text-xs text-gray-600">Obsazené</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{totalGuests}</div>
+              <div className="text-xs text-gray-600">👥 Hostů</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-emerald-600">{totalRevenue}</div>
+              <div className="text-xs text-gray-600">💰 Kč</div>
+            </div>
+          </div>
+
+          {/* Occupancy Bar */}
+          <div className="px-4 py-2">
+            <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-500"
+                style={{ width: `${(occupiedCount / rooms.length) * 100}%` }}
+              />
+            </div>
+            <p className="text-center text-sm text-gray-600 mt-1">
+              Obsazenost: {Math.round((occupiedCount / rooms.length) * 100)}%
+            </p>
+          </div>
+
+          {/* Rooms List */}
+          <div className="px-4 mt-4 space-y-3">
+            {rooms.map(room => (
+              <div 
+                key={room.id}
+                className={`rounded-2xl p-4 shadow-md transition-all duration-300 ${
+                  room.checkedIn 
+                    ? 'bg-gradient-to-r from-orange-100 to-amber-100 border-2 border-orange-300' 
+                    : 'bg-white border-2 border-green-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="text-4xl">{room.icon}</div>
+                    <div>
+                      <h3 className="font-bold text-gray-800">Pokoj {room.id}</h3>
+                      <p className="text-sm text-gray-600">{room.name}</p>
+                      <div className="flex gap-2 text-xs">
+                        <span className="font-bold text-sky-600">{room.price} Kč/noc</span>
+                        <span className="text-gray-400">•</span>
+                        <span className="text-gray-500">kapacita: {room.maxGuests} 👤</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                    room.checkedIn 
+                      ? 'bg-orange-500 text-white' 
+                      : 'bg-green-500 text-white'
+                  }`}>
+                    {room.checkedIn ? 'OBSAZENO' : 'VOLNO'}
+                  </div>
+                </div>
+
+                {room.checkedIn ? (
+                  <div className="mt-4">
+                    {/* Guest info */}
+                    <div className="bg-white/70 rounded-xl p-3 mb-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm text-gray-600">Host:</p>
+                          <p className="text-xl font-bold text-gray-800">👤 {room.guest}</p>
+                          <div className="flex gap-3 mt-1">
+                            <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                              🧑 {room.adults} {room.adults === 1 ? 'dospělý' : room.adults < 5 ? 'dospělí' : 'dospělých'}
+                            </span>
+                            {room.children > 0 && (
+                              <span className="text-sm bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">
+                                👶 {room.children} {room.children === 1 ? 'dítě' : room.children < 5 ? 'děti' : 'dětí'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">Celkem:</p>
+                          <p className="text-xl font-bold text-emerald-600">{calculateTotal(room)} Kč</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nights & Guests counters */}
+                    <div className="bg-sky-50 rounded-xl p-3 mb-3 space-y-2">
+                      <Counter 
+                        value={room.nights} 
+                        onDecrease={() => updateNights(room.id, -1)}
+                        onIncrease={() => updateNights(room.id, 1)}
+                        min={1}
+                        label="Nocí"
+                        icon="🌙"
+                      />
+                      <Counter 
+                        value={room.adults} 
+                        onDecrease={() => updateRoomGuests(room.id, 'adults', -1)}
+                        onIncrease={() => updateRoomGuests(room.id, 'adults', 1)}
+                        min={1}
+                        label="Dospělých"
+                        icon="🧑"
+                      />
+                      <Counter 
+                        value={room.children} 
+                        onDecrease={() => updateRoomGuests(room.id, 'children', -1)}
+                        onIncrease={() => updateRoomGuests(room.id, 'children', 1)}
+                        min={0}
+                        label="Dětí"
+                        icon="👶"
+                      />
+                    </div>
+
+                    {/* Price breakdown */}
+                    <div className="bg-gray-50 rounded-xl p-2 mb-3 text-sm">
+                      <div className="flex justify-between text-gray-600">
+                        <span>Pokoj ({room.nights}×{room.price} Kč)</span>
+                        <span>{room.nights * room.price} Kč</span>
+                      </div>
+                      {room.breakfast && (
+                        <>
+                          <div className="flex justify-between text-gray-600">
+                            <span>Snídaně dospělí ({room.nights}×{room.adults}×{BREAKFAST_PRICE_ADULT} Kč)</span>
+                            <span>{room.nights * room.adults * BREAKFAST_PRICE_ADULT} Kč</span>
+                          </div>
+                          {room.children > 0 && (
+                            <div className="flex justify-between text-gray-600">
+                              <span>Snídaně děti ({room.nights}×{room.children}×{BREAKFAST_PRICE_CHILD} Kč)</span>
+                              <span>{room.nights * room.children * BREAKFAST_PRICE_CHILD} Kč</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2 mb-3">
+                      <button
+                        onClick={() => togglePaid(room.id)}
+                        className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
+                          room.paid 
+                            ? 'bg-green-500 text-white shadow-md' 
+                            : 'bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {room.paid ? '✅ ZAPLACENO' : '💰 Nezaplaceno'}
+                      </button>
+                      <button
+                        onClick={() => toggleBreakfast(room.id)}
+                        className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 ${
+                          room.breakfast 
+                            ? 'bg-amber-500 text-white shadow-md' 
+                            : 'bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {room.breakfast ? '🍳 SNÍDANĚ' : '🚫 Bez snídaně'}
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => handleCheckOut(room.id)}
+                      className="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold shadow-md active:scale-95 transition-transform"
+                    >
+                      🚪 CHECK-OUT
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openCheckIn(room)}
+                    className="w-full mt-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold shadow-md active:scale-95 transition-transform"
+                  >
+                    ✨ CHECK-IN
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Check-in Modal */}
+          {showCheckIn && selectedRoom && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-2">{selectedRoom.icon}</div>
+                  <h2 className="text-xl font-bold text-gray-800">Check-in</h2>
+                  <p className="text-gray-600">{selectedRoom.name}</p>
+                  <div className="flex justify-center gap-2 mt-1">
+                    <span className="text-sky-600 font-bold">{selectedRoom.price} Kč/noc</span>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-gray-500">kapacita: {selectedRoom.maxGuests} 👤</span>
+                  </div>
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm font-bold text-gray-700 mb-1">
+                    👤 Jméno hosta:
+                  </label>
+                  <input
+                    type="text"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Napište jméno..."
+                    className="w-full p-3 border-2 border-sky-300 rounded-xl text-lg focus:border-sky-500 focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Guests & Nights */}
+                <div className="bg-sky-50 rounded-xl p-3 mb-3 space-y-2">
+                  <Counter 
+                    value={guestNights} 
+                    onDecrease={() => { 
+                      if (guestNights <= 1) { sound('error'); } 
+                      else { sound('click'); setGuestNights(guestNights - 1); }
+                    }}
+                    onIncrease={() => { 
+                      if (guestNights >= 14) { sound('error'); } 
+                      else { sound('click'); setGuestNights(guestNights + 1); }
+                    }}
+                    min={1}
+                    label="Nocí"
+                    icon="🌙"
+                  />
+                  <Counter 
+                    value={guestAdults} 
+                    onDecrease={() => { 
+                      if (guestAdults <= 1) { sound('error'); } 
+                      else { sound('click'); setGuestAdults(guestAdults - 1); }
+                    }}
+                    onIncrease={() => { 
+                      if (!canAddGuest()) { sound('error'); } 
+                      else { sound('click'); setGuestAdults(guestAdults + 1); }
+                    }}
+                    min={1}
+                    label="Dospělých"
+                    icon="🧑"
+                  />
+                  <Counter 
+                    value={guestChildren} 
+                    onDecrease={() => { 
+                      if (guestChildren <= 0) { sound('error'); } 
+                      else { sound('click'); setGuestChildren(guestChildren - 1); }
+                    }}
+                    onIncrease={() => { 
+                      if (!canAddGuest()) { sound('error'); } 
+                      else { sound('click'); setGuestChildren(guestChildren + 1); }
+                    }}
+                    min={0}
+                    label="Dětí"
+                    icon="👶"
+                  />
+                  <p className="text-center text-xs text-gray-500">
+                    Obsazeno: {'👤'.repeat(guestAdults + guestChildren)}{'⬜'.repeat(selectedRoom.maxGuests - guestAdults - guestChildren)}
+                  </p>
+                </div>
+
+                {/* Breakfast toggle */}
+                <button
+                  onClick={() => { sound('click'); setGuestBreakfast(!guestBreakfast); }}
+                  className={`w-full py-3 rounded-xl font-bold transition-all mb-3 ${
+                    guestBreakfast 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-gray-200 text-gray-600'
+                  }`}
+                >
+                  {guestBreakfast ? '🍳 Se snídaní' : '🚫 Bez snídaně'}
+                  <span className="block text-xs font-normal mt-0.5">
+                    (dospělý {BREAKFAST_PRICE_ADULT} Kč, dítě {BREAKFAST_PRICE_CHILD} Kč / noc)
+                  </span>
+                </button>
+
+                {/* Price preview */}
+                <div className="bg-sky-50 rounded-xl p-3 mb-4 text-sm">
+                  <div className="flex justify-between text-gray-700">
+                    <span>Pokoj:</span>
+                    <span>{guestNights} × {selectedRoom.price} Kč = {guestNights * selectedRoom.price} Kč</span>
+                  </div>
+                  {guestBreakfast && (
+                    <>
+                      <div className="flex justify-between text-gray-700">
+                        <span>Snídaně dospělí:</span>
+                        <span>{guestNights} × {guestAdults} × {BREAKFAST_PRICE_ADULT} = {guestNights * guestAdults * BREAKFAST_PRICE_ADULT} Kč</span>
+                      </div>
+                      {guestChildren > 0 && (
+                        <div className="flex justify-between text-gray-700">
+                          <span>Snídaně děti:</span>
+                          <span>{guestNights} × {guestChildren} × {BREAKFAST_PRICE_CHILD} = {guestNights * guestChildren * BREAKFAST_PRICE_CHILD} Kč</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex justify-between font-bold text-lg text-emerald-600 mt-2 pt-2 border-t border-sky-200">
+                    <span>Celkem:</span>
+                    <span>{guestNights * selectedRoom.price + (guestBreakfast ? previewBreakfastCost() : 0)} Kč</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      sound('click');
+                      resetForm();
+                    }}
+                    className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold active:scale-95"
+                  >
+                    Zrušit
+                  </button>
+                  <button
+                    onClick={() => handleCheckIn(selectedRoom.id)}
+                    disabled={!guestName.trim()}
+                    className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  >
+                    Ubytovat 🐧
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="mt-8 text-center text-gray-500 text-sm">
+            <p>🐧❄️ Hotel U Tučňáka ❄️🐧</p>
+            <p>Kde je vždy ledově prima!</p>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<HotelTucnak />);
+  </script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
